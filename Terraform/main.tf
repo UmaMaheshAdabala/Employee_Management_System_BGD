@@ -197,6 +197,7 @@ resource "aws_lb" "my-alb" {
   internal           = false
 }
 
+
 #ALB Target Group(Frontend-Blue)
 resource "aws_alb_target_group" "my-alb-tg-frontend-blue" {
   name        = "myTGFrontendBlue"
@@ -288,6 +289,49 @@ resource "aws_alb_listener_rule" "my-alb-listener-backend" {
       values = ["/api/*"]
     }
   }
+}
+
+# Cloudwatch logs for ALB
+resource "aws_cloudwatch_log_group" "alb-logs" {
+  name = "/aws/vpc/alb-logs/alb"
+}
+
+# IAM Role for logs
+resource "aws_iam_role" "alb-logs-role" {
+  name = "alb-logs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs" {
+  role = aws_iam_role.alb-logs-role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_flow_log" "alb" {
+  vpc_id               = aws_vpc.my-vpc.id
+  traffic_type         = "ALL"
+  log_destination_type = "cloud-watch-logs"
+  log_destination      = aws_cloudwatch_log_group.flow_logs.arn
+  iam_role_arn         = aws_iam_role.alb-logs-role.arn
 }
 
 #Role for Task Definition ( ECS Execution Role)
@@ -422,6 +466,14 @@ resource "aws_ecs_task_definition" "my-task-frontend-blue" {
       # To enable exec
       linuxParameters = {
         initProcessEnabled = true
+      },
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.ecs_log_group.name,
+          awslogs-region        = "us-east-1",
+          awslogs-stream-prefix = "frontend-blue"
+        }
       }
     }
   ])
@@ -455,6 +507,14 @@ resource "aws_ecs_task_definition" "my-task-frontend-green" {
       # To enable exec
       linuxParameters = {
         initProcessEnabled = true
+      },
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.ecs_log_group.name,
+          awslogs-region        = "us-east-1",
+          awslogs-stream-prefix = "frontend-green"
+        }
       }
     }
   ])
@@ -505,6 +565,14 @@ resource "aws_ecs_task_definition" "my-task-backend-blue" {
       # To enable exec
       linuxParameters = {
         initProcessEnabled = true
+      },
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.ecs_log_group.name,
+          awslogs-region        = "us-east-1",
+          awslogs-stream-prefix = "backend-blue"
+        }
       }
 
     }
@@ -555,11 +623,29 @@ resource "aws_ecs_task_definition" "my-task-backend-green" {
       # To enable exec
       linuxParameters = {
         initProcessEnabled = true
+      },
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.ecs_log_group.name,
+          awslogs-region        = "us-east-1",
+          awslogs-stream-prefix = "backend-green"
+        }
       }
 
     }
   ])
 
+}
+
+# CloudWatch Log Group for ECS
+resource "aws_cloudwatch_log_group" "ecs_log_group" {
+  name              = "/ecs/myAppLogs"
+  retention_in_days = 7
+
+  tags = {
+    Name = "myECSLogGroup"
+  }
 }
 
 
