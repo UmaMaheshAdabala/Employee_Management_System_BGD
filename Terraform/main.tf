@@ -256,11 +256,11 @@ resource "aws_alb_listener" "my-alb-listener" {
     type = "forward"
     forward {
       target_group {
-        arn    = aws_alb_target_group.my-alb-tg-frontend-blue
+        arn    = aws_alb_target_group.my-alb-tg-frontend-blue.arn
         weight = 80
       }
       target_group {
-        arn    = aws_alb_target_group.my-alb-tg-frontend-green
+        arn    = aws_alb_target_group.my-alb-tg-frontend-green.arn
         weight = 20
       }
     }
@@ -274,11 +274,11 @@ resource "aws_alb_listener_rule" "my-alb-listener-backend" {
     type = "forward"
     forward {
       target_group {
-        arn    = aws_alb_target_group.my-alb-tg-backend-blue
+        arn    = aws_alb_target_group.my-alb-tg-backend-blue.arn
         weight = 80
       }
       target_group {
-        arn    = aws_alb_target_group.my-alb-tg-backend-green
+        arn    = aws_alb_target_group.my-alb-tg-backend-green.arn
         weight = 20
       }
     }
@@ -314,14 +314,22 @@ resource "aws_iam_role_policy_attachment" "name" {
 }
 
 
-# #ECR REPO(frontend)
-resource "aws_ecr_repository" "my-ecr-frontend" {
-  name = "my-ecr-repo-frontend"
+#ECR REPO(frontend-blue)
+resource "aws_ecr_repository" "my-ecr-frontend-blue" {
+  name = "my-ecr-repo-frontend-blue"
+}
+#ECR Repo(Frontend-green)
+resource "aws_ecr_repository" "my-ecr-frontend-green" {
+  name = "my-ecr-repo-frontend-green"
 }
 
-#ECR Repo(Backend)
-resource "aws_ecr_repository" "my-ecr-backend" {
-  name = "my-ecr-repo-backend"
+#ECR Repo(Backend-blue)
+resource "aws_ecr_repository" "my-ecr-backend-blue" {
+  name = "my-ecr-repo-backend-blue"
+}
+#ECR Repo(Backend-green)
+resource "aws_ecr_repository" "my-ecr-backend-green" {
+  name = "my-ecr-repo-backend-green"
 }
 
 # ECS Cluster
@@ -401,7 +409,7 @@ resource "aws_ecs_task_definition" "my-task-frontend-blue" {
   container_definitions = jsonencode([
     {
       name      = "my-frontend-container",
-      image     = aws_ecr_repository.my-ecr-frontend.repository_url,
+      image     = aws_ecr_repository.my-ecr-frontend-blue.repository_url,
       essential = true,
       portMappings = [
         {
@@ -434,7 +442,7 @@ resource "aws_ecs_task_definition" "my-task-frontend-green" {
   container_definitions = jsonencode([
     {
       name      = "my-frontend-container",
-      image     = aws_ecr_repository.my-ecr-frontend.repository_url,
+      image     = aws_ecr_repository.my-ecr-frontend-green.repository_url,
       essential = true,
       portMappings = [
         {
@@ -466,7 +474,7 @@ resource "aws_ecs_task_definition" "my-task-backend-blue" {
   container_definitions = jsonencode([
     {
       name      = "my-backend-container",
-      image     = aws_ecr_repository.my-ecr-backend.repository_url,
+      image     = aws_ecr_repository.my-ecr-backend-blue.repository_url,
       essential = true,
       portMappings = [
         {
@@ -516,7 +524,7 @@ resource "aws_ecs_task_definition" "my-task-backend-green" {
   container_definitions = jsonencode([
     {
       name      = "my-backend-container",
-      image     = aws_ecr_repository.my-ecr-backend.repository_url,
+      image     = aws_ecr_repository.my-ecr-backend-green.repository_url,
       essential = true,
       portMappings = [
         {
@@ -604,7 +612,7 @@ resource "aws_ecs_service" "my-ecs-service-backend-blue" {
   cluster         = aws_ecs_cluster.my-ecs-cluster.id
   task_definition = aws_ecs_task_definition.my-task-backend-blue.arn
   desired_count   = 1
-  # launch_type     = "FARGATE" # For fargate
+  launch_type     = "FARGATE" # For fargate
   network_configuration {
     subnets          = [aws_subnet.my-private-subnet[1].id]
     security_groups  = [aws_security_group.my-ecs-sg.id]
@@ -626,7 +634,7 @@ resource "aws_ecs_service" "my-ecs-service-backend-green" {
   cluster         = aws_ecs_cluster.my-ecs-cluster.id
   task_definition = aws_ecs_task_definition.my-task-backend-green.arn
   desired_count   = 1
-  # launch_type     = "FARGATE" # For fargate
+  launch_type     = "FARGATE" # For fargate
   network_configuration {
     subnets          = [aws_subnet.my-private-subnet[1].id]
     security_groups  = [aws_security_group.my-ecs-sg.id]
