@@ -19,6 +19,11 @@ COPY nginx.conf /etc/nginx/conf.d
 # Copy built from stage-1
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# Log to stdout and stderr
+RUN mkdir -p /var/log/nginx
+RUN ln -sf /dev/stdout /var/log/nginx/access.log \
+ && ln -sf /dev/stderr /var/log/nginx/error.log
+
 # Expose port 80
 EXPOSE 80
 
