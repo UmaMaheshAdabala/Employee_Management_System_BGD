@@ -195,6 +195,12 @@ resource "aws_lb" "my-alb" {
   subnets            = [aws_subnet.my-public-subnet[0].id, aws_subnet.my-public-subnet[1].id]
   security_groups    = [aws_security_group.my-alb-sg.id]
   internal           = false
+  access_logs {
+    bucket  = aws_s3_bucket.alb-logs-bucket.bucket
+    prefix  = "myALB"
+    enabled = true
+  }
+  depends_on = [aws_s3_bucket_policy.name]
 }
 
 
@@ -205,6 +211,7 @@ resource "aws_alb_target_group" "my-alb-tg-frontend-blue" {
   port        = 80
   protocol    = "HTTP"
   target_type = "ip"
+
 }
 
 #ALB Target Group(Frontend-Green)
@@ -214,6 +221,7 @@ resource "aws_alb_target_group" "my-alb-tg-frontend-green" {
   port        = 80
   protocol    = "HTTP"
   target_type = "ip"
+
 }
 
 #ALB Target Group(Backend-Blue)
@@ -258,14 +266,20 @@ resource "aws_alb_listener" "my-alb-listener" {
     forward {
       target_group {
         arn    = aws_alb_target_group.my-alb-tg-frontend-blue.arn
-        weight = 80
+        weight = 50
       }
       target_group {
         arn    = aws_alb_target_group.my-alb-tg-frontend-green.arn
-        weight = 20
+        weight = 50
+      }
+
+      stickiness {
+        enabled  = true
+        duration = 120
       }
     }
   }
+
 }
 
 #ALB Listener rule
@@ -276,11 +290,11 @@ resource "aws_alb_listener_rule" "my-alb-listener-backend" {
     forward {
       target_group {
         arn    = aws_alb_target_group.my-alb-tg-backend-blue.arn
-        weight = 80
+        weight = 50
       }
       target_group {
         arn    = aws_alb_target_group.my-alb-tg-backend-green.arn
-        weight = 20
+        weight = 50
       }
     }
   }
@@ -291,48 +305,97 @@ resource "aws_alb_listener_rule" "my-alb-listener-backend" {
   }
 }
 
-# Cloudwatch logs for ALB
-resource "aws_cloudwatch_log_group" "alb-logs" {
-  name = "/aws/vpc/alb-logs/alb"
+# # Cloudwatch logs for ALB
+# resource "aws_cloudwatch_log_group" "alb-logs" {
+#   name = "/aws/vpc/alb-logs/alb"
+# }
+
+# # IAM Role for logs
+# resource "aws_iam_role" "alb-logs-role" {
+#   name = "alb-logs-role"
+
+#   assume_role_policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [{
+#       Effect    = "Allow"
+#       Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+#       Action    = "sts:AssumeRole"
+#     }]
+#   })
+# }
+
+
+
+# resource "aws_iam_role_policy" "vpc_flow_logs" {
+#   role = aws_iam_role.alb-logs-role.id
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [{
+#       Effect = "Allow"
+#       Action = [
+#         "logs:CreateLogGroup",
+#         "logs:CreateLogStream",
+#         "logs:PutLogEvents"
+#       ]
+#       Resource = "*"
+#     }]
+#   })
+# }
+
+# resource "aws_flow_log" "alb" {
+#   vpc_id               = aws_vpc.my-vpc.id
+#   traffic_type         = "ALL"
+#   log_destination_type = "cloud-watch-logs"
+#   log_destination      = aws_cloudwatch_log_group.alb-logs.arn
+#   iam_role_arn         = aws_iam_role.alb-logs-role.arn
+# }
+
+# ALB Access Logs via S3
+resource "aws_s3_bucket" "alb-logs-bucket" {
+  bucket = "my-alb-logs-ems-traffic-logs"
+  tags = {
+    Name = "ALB-access-logs"
+  }
 }
 
-# IAM Role for logs
-resource "aws_iam_role" "alb-logs-role" {
-  name = "alb-logs-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "vpc_flow_logs" {
-  role = aws_iam_role.alb-logs-role.id
+#S3 bucket policy for ALB logs
+resource "aws_s3_bucket_policy" "name" {
+  bucket = aws_s3_bucket.alb-logs-bucket.id
   policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ]
-      Resource = "*"
-    }]
+    Statement = [
+      {
+        Sid    = "ALBAccessLogsPolicy"
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb-logs-bucket.arn}/AWSLogs/*"
+      },
+      {
+        Sid    = "AllowBucketACLCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action = [
+          "s3:GetBucketAcl"
+        ]
+        Resource = aws_s3_bucket.alb-logs-bucket.arn
+      },
+      {
+        "Sid" : "AWSLogDeliveryAccountWrite",
+        "Effect" : "Allow",
+        "Principal" : {
+          "AWS" : "arn:aws:iam::127311923021:root"
+        },
+        "Action" : "s3:PutObject",
+        "Resource" : "arn:aws:s3:::my-alb-logs-ems-traffic-logs/*"
+      }
+    ]
   })
 }
 
-resource "aws_flow_log" "alb" {
-  vpc_id               = aws_vpc.my-vpc.id
-  traffic_type         = "ALL"
-  log_destination_type = "cloud-watch-logs"
-  log_destination      = aws_cloudwatch_log_group.flow_logs.arn
-  iam_role_arn         = aws_iam_role.alb-logs-role.arn
-}
 
 #Role for Task Definition ( ECS Execution Role)
 resource "aws_iam_role" "my-exec-role" {
@@ -379,6 +442,10 @@ resource "aws_ecr_repository" "my-ecr-backend-green" {
 # ECS Cluster
 resource "aws_ecs_cluster" "my-ecs-cluster" {
   name = "myECSCLUSTER"
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
 }
 
 # Role fo Task Defintion ( ECS Task Role)
