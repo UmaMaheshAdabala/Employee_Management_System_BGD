@@ -42,9 +42,9 @@ const verifyUser = (req, res, next) => {
   }
 };
 
+console.log("Blue Env");
+
 app.get("/api/health", (req, res) => {
-  console.log("Health Check OK");
-  console.log("Blue Env");
   res.status(200).send("OK");
 });
 
