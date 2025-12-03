@@ -18,6 +18,5 @@ COPY . .
 EXPOSE 3000
 
 # Start the application
-
 CMD ["sh", "-c", "node index.js 2>&1 | tee app.log"]
 
