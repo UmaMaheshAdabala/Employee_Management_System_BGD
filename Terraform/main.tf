@@ -437,8 +437,6 @@ resource "aws_iam_role_policy" "ecs_task_policy" {
           "ssm:DescribeSessions",
           "ssm:GetConnectionStatus",
           "rds:DescribeDBInstances",
-          "s3:GetObject",
-          "s3:PutObject",
           "ssmmessages:CreateControlChannel",
           "ssmmessages:CreateDataChannel",
           "ssmmessages:OpenControlChannel",
